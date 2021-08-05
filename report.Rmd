@@ -522,6 +522,7 @@ The activation function for the output layer is linear, since $x \in \mathbb{R}$
 
 ```{r , echo=T, warning = F, include=T, results=T, eval  = T}
 
+set.seed(123)
 Input <- layer_input(shape = 5, dtype = 'float32', name = 'Input')
   
 Encoder = Input %>% 
@@ -572,7 +573,6 @@ abline(h=c(reconstruction[2]), col="red")
 
 ```{r , echo=T, warning = F, include=T, results=T, eval  = T}
 
-set.seed(123)
 fit <- model %>% predict(as.matrix(dati_norm))
 round(frobenius_loss(dati_norm, fit), 2)
 
@@ -627,6 +627,7 @@ BNN <- function(q0, q1){
 }
 
 # outer part
+set.seed(123)
 outer <- BNN(5, 7)
 
 fit <- outer %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), 
@@ -638,6 +639,7 @@ zz <- keras_model(inputs= outer$input,
 yy <- zz %>% predict(as.matrix(dati_norm))
 
 # inner part 
+set.seed(123)
 inner <- BNN_1(7, 2)
 
 fit <- inner %>% fit(as.matrix(yy), as.matrix(yy), 
@@ -655,7 +657,6 @@ weights[[2]] <- weight_inner[[1]]
 weights[[3]] <- weight_inner[[2]]
 set_weights(model, weights)
 
-set.seed(123)
 fit0 <- model %>% predict(as.matrix(dati_norm))
 
 # reconstruction error
@@ -664,7 +665,7 @@ round(frobenius_loss(dati_norm, fit0), 2)
 ```
 
 Using the pre-trained weights extracted above, we retrain the full BNN and obtain a reconstruction error of 1.3, which is worse than the one obtained with PCA (1.19) as well as the one obtained by training the full model. However, by using these weights to initialize the full BNN, we obtain a reconstruction error of 0.84, which is slightly smaller than the one obtained without initialization. 
-Figure \ref{pre_train} shows the decrease of the Frobenius loss over 5000 training epochs. We see that after about 2000 epochs the reconstruction error falls below the one of the PCA with 2 principal components. 
+Figure \ref{pre_train} shows the decrease of the Frobenius loss over 5000 training epochs. We see that after about 1000 epochs the reconstruction error falls below the one of the PCA with 2 principal components. 
 
 \begin{scheme}
 \caption{\textbf{Loss function of pre-trained BNN}}
@@ -702,6 +703,7 @@ points(x=dat0$pca1, y=dat0$pca2, col="green",pch=20)
 
 
 # BNN
+set.seed(123)
 encoder <- keras_model(inputs=model$input, outputs=get_layer(model, 'Bottleneck')$output)
 y <- encoder %>% predict(as.matrix(dati_norm))
 y0 <- max(abs(y))*1.1
