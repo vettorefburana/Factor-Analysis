@@ -1,0 +1,741 @@
+
+---
+title: 'Factor Analysis: PCA vs Autoencoder'
+author: "Verena Brufatto"
+date: \today
+output:
+  pdf_document:
+    fig_caption: yes
+    fig_height: 5
+    fig_width: 5
+    latex_engine: xelatex
+    toc: no
+    toc_depth: 2
+    number_sections: true
+  word_document:
+    
+    toc: yes
+  theme: readable
+  highlight: tango
+  graphics: yes
+header-includes:
+- \usepackage[listings, breakable, most]{tcolorbox}
+- \definecolor{framecolor}{RGB}{163, 21, 21}
+- \definecolor{backcolor}{RGB}{220, 220, 220}
+- \definecolor{backcolor2}{RGB}{237, 237, 237}
+- \usepackage{hyperref}
+- \urlstyle{same}
+- \usepackage{eurosym}
+- \usepackage{float}
+- \usepackage{amsmath}
+- \floatplacement{figure}{H}
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+#- \fancyfoot[LE,RO]{\thepage}
+- \fancyhead[RO, RE]{ }
+- \usepackage{fontspec}
+- \setmainfont{Calibri}
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \usepackage[labelfont=bf, font=large]{caption}
+- \usepackage{footnote}
+- \captionsetup[figure]{belowskip=2pt, aboveskip=-12pt}
+- \captionsetup[table]{textfont=bf}
+- \usepackage{eurosym}
+- \usepackage{ragged2e}
+- \usepackage{dcolumn}
+- \usepackage{lscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+- \usepackage{setspace}\doublespacing
+- \renewcommand{\baselinestretch}{1}
+- \usepackage[fontsize=14pt]{scrextend}
+- \DeclareCaptionType[fileext=los,placement={!h}]{scheme} 
+- \renewcommand{\schemename}{Figura}
+- \DeclareCaptionType[fileext=los,placement={!ht}]{troll} 
+- \renewcommand{\trollname}{Tabella}
+- \renewcommand{\figurename}{Figura}
+- \renewcommand{\tablename}{Tabella}
+- \renewcommand{\contentsname}{Indice}
+- \renewcommand{\thefigure}{\Alph{figure}}
+- \setlength{\intextsep}{10pt plus 2pt minus 2pt}
+- \floatplacement{scheme}{H}
+- \captionsetup[scheme]{belowskip=2pt, aboveskip=-12pt}
+- \newtcolorbox[auto counter, list inside=boxes]{mybox}[1][]{breakable, colframe=framecolor, colback=black!5!white,title=Box \thetcbcounter :, fonttitle=\normalsize\bfseries, subtitle style= {top=-2pt, nobeforeafter,colback=black!5!white, coltext=black, colframe=black!5!white, fontupper=\itshape\small}, parbox=false, arc=3mm, sharp corners=downhill}
+classoption: table
+# abstract: ""
+---
+
+```{r setup, include=FALSE}
+
+chooseCRANmirror(graphics=FALSE, ind=1)
+knitr::opts_chunk$set(echo = TRUE, fig.pos= "h")
+
+library(ggcorrplot)
+library(MASS)
+library(keras)
+library(NeuralNetTools)
+library(kableExtra)
+
+# funzioni ############
+add_legend <- function(...) {
+  opar <- par(fig=c(0, 1, 0, 1), oma=c(0, 0, 0, 0),
+              mar=c(0, 0, 0, 0), new=TRUE)
+  on.exit(par(opar))
+  plot(0, 0, type='n', bty='n', xaxt='n', yaxt='n')
+  legend(...)
+}
+
+frobenius_loss <- function(x1, x2){
+  sqrt(sum(as.matrix((x1-x2)^2))/nrow(x1))
+}
+
+BNN_1 <- function(q00, q22){
+  set.seed(123)
+  Input <- layer_input(shape = c(q00), dtype = 'float32', name = 'Input')
+  
+  Output = Input %>% 
+    layer_dense(units=q22, activation='tanh', use_bias=FALSE, name='Bottleneck') %>% 
+    layer_dense(units=q00, activation='linear', use_bias=FALSE, name='Output')
+  
+  model <- keras_model(inputs = Input, outputs = Output)
+  
+  model %>% compile(optimizer = optimizer_nadam(), loss = 'mean_squared_error')
+  return(model)
+}
+
+BNN_3 <- function(q00, q11, q22){  
+  set.seed(123)
+  Input <- layer_input(shape = c(q00), dtype = 'float32', name = 'Input')
+  
+  Encoder = Input %>% 
+    layer_dense(units=q11, activation='tanh', use_bias=FALSE, name='Layer1') %>%
+    layer_dense(units=q22, activation='tanh', use_bias=FALSE, name='Bottleneck') 
+  
+  Decoder = Encoder %>% 
+    layer_dense(units=q11, activation='tanh', use_bias=FALSE, name='Layer3') %>% 
+    layer_dense(units=q00, activation='linear', use_bias=FALSE, name='Output')
+  
+  model <- keras_model(inputs = Input, outputs = Decoder)
+  model %>% compile(optimizer = optimizer_nadam(), loss = 'mean_squared_error')
+  return(model)
+}
+
+
+### parameters ######
+set.seed(123)
+
+options(warn=-1)
+
+parm <- list(oma = c(0.3, 0, 0, 0), mar=c(5.1, 3.1, 4.1, 3.1))
+
+```
+
+\tableofcontents
+
+\newpage
+
+# Introduction
+
+# Data preprocessing
+
+The following analysis is based on the Boston Housing dataset, which contains data on the real estate market of Boston, Massacchusetts, collected in 1978. The dataset contains 506 observations of the following variables: 
+
+* *crim*: per capita crime rate by town 
+* *zn*: proportion of residential land zoned for lots over 25,000 sq.ft
+* *indus*: 	proportion of non-retail business acres per town
+* *chas*:	Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+* *nox*:	nitric oxides concentration (parts per 10 million)
+* *rm*:	average number of rooms per dwelling
+* *age*:	proportion of owner-occupied units built prior to 1940
+* *dis*:	weighted distances to five Boston employment centres
+* *rad*:	index of accessibility to radial highways
+* *tax*:	full-value property-tax rate per USD 10,000
+* *ptratio*:	pupil-teacher ratio by town
+* *black*:	1000(B - 0.63)^2 where B is the proportion of blacks by town
+* *lstat*:	percentage of lower status of the population
+* *medv*:	median value of owner-occupied homes in USD 1000's
+
+The target variables is *medv*, while the others can be used as explanatory variables. Table \ref{tab:tabella} and Figures \ref{box_1}-\ref{box_2} show that the feature *black* has up to 15% of outliers, while *zn* and *crime* have about 13%. Figure \ref{corr} shows that the features that are most correlated with *medv* are *lstat*, *ptratio*, *tax*, *rm*, *nox*, *indus*. 
+
+```{r tabella,echo=FALSE, warning = FALSE, include=T, results=T, fig.width=10, fig.height=12}
+
+boston = Boston
+
+outliers = apply(boston, 2, function(x){
+  boxplot.stats(x)$out
+})
+
+percentage = lapply(outliers, function(x){
+
+ round( 100*( length(x)/nrow(boston) ), 1)
+  
+})
+
+perc = unlist(percentage)
+
+kable(t(perc),
+      "latex",
+      caption = "Percentage of outliers",
+      digits = 1,
+      align = "r",
+      linesep = "",
+      longtable =T,
+      booktabs = T) %>%
+
+kable_styling(latex_options = c("HOLD_position", "scale_down"),
+              position = "center",
+              full_width = F, 
+              font_size = 11)
+
+```
+
+
+\begin{scheme}
+\caption{\textbf{Boxplot of features}}
+\label{box_1}
+```{r box_1,echo=FALSE, warning = FALSE, fig.width=10, fig.height=12, fig.show='hold',fig.align='center'}
+
+par(mfrow = c(3, 3), mar = c(2, 2, 2, 2))
+for(i in 1:9){
+  
+  boxplot(boston[, i], main = colnames(boston)[i])
+  
+}
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+\begin{scheme}
+\caption{\textbf{Boxplot of features}}
+\label{box_2}
+```{r box_2,echo=FALSE, warning = FALSE, fig.width=10, fig.height=12, fig.show='hold',fig.align='center'}
+
+par(mfrow = c(3, 2), mar = c(2, 2, 2, 2))
+for(i in 10:ncol(boston)){
+  
+  boxplot(boston[, i], main = colnames(boston)[i])
+  
+}
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+
+\begin{scheme}
+\caption{\textbf{Correlation of features}}
+\label{corr}
+\vspace{-1em}
+```{r corr,echo=FALSE, warning = FALSE, fig.width=7, fig.height=6, fig.show='hold',fig.align='center'}
+
+ggcorrplot(cor(boston), lab = T, outline.col = "white", type = "lower")
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+
+For comparison with the correlation coefficients, we use the R function \
+\texttt{ols\_step\_all\_possible} from the package \texttt{olsrr} to test all possible subsets of the set of potential explanatory variables. We then select the optimal model specification based on the Bayesian-Shwarz (BIC) information criterion, defined as: 
+
+$$
+BIC = k ln(n) - 2 ln (\hat{L})
+$$
+where $k$ is the number of estimated parameters, $n$ the number of observations in the dataset and $\hat{L} = p(x|\hat{\theta}, M)$ the maximum likelihood estimator. 
+
+\newpage
+
+```{r ,echo=T, warning = F, include=T, results=F, eval  = F, fig.cap="Feature selection with BIC"}
+
+regression = lm(medv ~ ., data = boston)
+selection = ols_step_all_possible(regression)
+bic_selection = data.frame( selection[ which.min(selection$sbic),] )
+predictors = strsplit(bic_selection$predictors, " +")[[1]]
+
+```
+
+According to the information criterion, the optimal set of features includes *crim*,  *zn*, *chas*, *nox*, *rm*, *dis*,     *rad*, *tax*, *ptratio*, *black* and *lstat*. Since the variable *indus* is not included in the selection performed by BIC, we omit it from the set of explanatory variables and use the remaining features for the rest of the analysis, since they also exhibit a very low number of outliers.  
+We furthermore choose to adopt the same feature transformations described in the paper by Harrison and Rubinfeld (1978), from which the Boston dataset stems.  The authors apply a logarithmic transformation to the variables *medv* and *lstat* and a quadratic transformation to the variables *nox* and *rm*. Figure \ref{hist_1} show the distribution of the new features, while Figure \ref{qq} shows a comparison of the empirical marginal densities of the features to a Gaussian approximation (the Q-Q plot). For the features *medv*, *lstat* and *rm*, the Gaussian approximation works reasonably well, while for the others it does not look reasonable. This fact may be relevant for the subsequent parts of this analysis due to the use of Euclidean distance in the objective function, which is the standard choice for Gaussian random variables. 
+
+\newpage
+
+\begin{scheme}
+\caption{\textbf{Histogram of features}}
+\label{hist_1}
+```{r hist_1,echo=FALSE, warning = FALSE, fig.width=10, fig.height=12, fig.show='hold',fig.align='center'}
+
+
+fts = c("medv","lstat", "ptratio","tax", "rm","nox")
+db_sel = boston[, fts]
+
+tolog = c("medv", "lstat")
+db_log = db_sel
+db_log[, tolog] = log(db_sel[, tolog])
+
+tosquare = c("nox", "rm")
+db_log[, tosquare] = db_sel[, tosquare]^2
+dataset = db_log[, fts]
+
+par(mfrow = c(3, 2), mar = c(2, 2, 2, 2))
+for(i in 1:ncol(dataset)){
+  
+  hist(dataset[, i], prob=TRUE, main = colnames(dataset)[i])          
+  lines(density(dataset[, i]), col = "steelblue", lwd = 2)      
+  
+}
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+
+\begin{scheme}
+\caption{\textbf{Q-Q plot}}
+\label{qq}
+```{r qq,echo=FALSE, warning = FALSE, fig.width=10, fig.height=12, fig.show='hold',fig.align='center'}
+
+par(mfrow = c(3, 2), mar = c(2, 2, 2, 2))
+for(i in 1:ncol(dataset)){
+  
+  qqnorm(dataset[, i], pch = 1, frame = FALSE, main = colnames(dataset)[i])
+  qqline(dataset[, i], col = "steelblue", lwd = 2)
+  
+}
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+# Principal component analysis
+
+Principal component analysis (PCA) aims at reducing the dimension of a dataset while preserving the original information by minimizing the recostruction error. 
+
+In order to apply PCA, we need to standardize the features $X = (x_1, ..., x_n) \in \mathbb{R}^{n \times q}$. PCA finds an orthonormal basis $v_1, .., v_q$ that spans the space $\mathbb{R}^q$ such that $v_1$ explains the direction of the largest heterogeneity in $X$, $v_2$ the direction of the second largest heterogeneity orthogonal to $v_1$ and so on.  
+
+The goal is to find a lower dimensional approximation $Y = (y_1, ..., y_n) \in \mathbb{R}^p$ of $X$ for which $p \leq q$ and such that
+
+$$
+y_{i,j} = v_{j,1} x_{i, 1} +, ...,+ v_{j,q} x_{i, q}
+$$
+for $i = 1, ..., n$ and $j = 1, .., q$.
+
+The first and second weights are determined as 
+
+$$
+v_1 = \underset{|| \omega ^T\omega || = 1}{argmax} \left( \omega^T X^TX \omega  \right)
+$$
+and
+
+$$
+ v_2 = \underset{|| \omega ^T\omega || = 1}{argmax} \left( \omega^T X^TX \omega  \right), \hspace{1cm} \langle v_1, \omega \rangle = 0
+$$
+Therefore, the j-th weight is given by 
+
+$$
+v_j = \underset{|| \omega ^T\omega || = 1}{argmax} \left( \omega^T X^TX \omega  \right), \hspace{1cm} \langle v_l, \omega \rangle = 0, \forall 1 \leq l \leq j-1
+$$
+The matrix $A = X^TX$ is positive definite and symmetric by assumption, so that the orthonormal basis $v_1, ..., v_q$ is given by the ordered eigenvalues of $A$.
+
+\newpage
+
+```{r ,echo=T, warning = F, include=T, results=T, eval  = T}
+
+dati_norm = scale(dataset[, -1])
+pca = prcomp(dati_norm, center = F, scale = F)
+summary(pca)
+pca$rotation
+
+```
+
+The first two principal components explain about 75% of the total variation (or in this case correlation, since the data is standardized), meaning that most of the variability in $X$ can be explained by $v_1$
+and $v_2$.
+
+Figure \ref{qq_pca} shows the Q-Q plots of the principal components against a Gaussian distribution. For some of the principal components, a Gaussian assumption is questionable.  
+
+\begin{scheme}
+\caption{\textbf{Q-Q plot of principal components}}
+\label{qq_pca}
+```{r qq_pca,echo=FALSE, warning = FALSE, fig.width=10, fig.height=12, fig.show='hold',fig.align='center'}
+
+componenti = pca$x
+
+par(mfrow = c(3, 2), mar = c(2, 2, 2, 2))
+for(i in 1:ncol(componenti)){
+  
+  qqnorm(componenti[, i], pch = 1, frame = FALSE, main = colnames(componenti)[i])
+  qqline(componenti[, i], col = "steelblue", lwd = 2)
+  
+}
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+\newpage
+
+Figure \ref{biplot} (lhs) shows the biplot of the first two principal components $y_i = (v_1, v_2)^Tx_i$ on the primary axis and their weight vectors $v_{1,l}$ and $v_{2, l}$, $l = 1,...,q$, on the secondary axis (LHS). The principal components $y_i$ are represented by black numbers, while the weight vectors, i.e. the components of the first two orthonormal vectors $v_1$ and $v_2$, are represented by red arrows. The length of the arrows measures how strongly each feature influences the principal components, and the cosines of the angles between arrows measure the corresponding correlations.
+
+Figure \ref{biplot} (rhs) shows the values of the first two principal components $y_i \in \mathbb{R}^2$ for each house $i = 1, ..., 506$, divided in three groups based on house price range (*medv*). In this case, each car $x_i$ is represented by a point $y_i = (v_1, v_2)^Tx_i \in \mathbb{R}^2$.  The two principal components seem to explain the dependent variable quite well since the clusters of different price ranges are well defined. 
+
+\begin{scheme}
+\caption{\textbf{Biplot of PCA}}
+\label{biplot}
+```{r biplot,echo=FALSE, warning = FALSE, fig.width=10, fig.height=5.5, fig.show='hold',fig.align='center'}
+
+
+dati = cbind(dataset, pca1 = pca$x[, 1], pca2 = pca$x[, 2])
+dati$medv = exp(dataset$medv)
+
+par(mfrow = c(1, 2))
+
+biplot(pca,xlab="1st pc", ylab="2nd pc", scale=0, expand=2,
+       cex=c(0.8,1), ylim=c(-5,6), xlim=c(-5,5))
+
+plot(x=dati$pca1, y=dati$pca2, col="blue",pch=20, 
+     ylab="2nd pc", xlab="1st pc")
+dat0 <- dati[which( dati$medv >= 10 &  dati$medv < 30 ),]
+points(x=dat0$pca1, y=dat0$pca2, col="red",pch=20)
+dat0 <- dati[which(dati$medv<10),]
+points(x=dat0$pca1, y=dat0$pca2, col="green",pch=20)
+add_legend("topright", c("high", "medium", "low"), col=c("blue", "red", "green"), 
+       lty=c(-1,-1,-1), lwd=c(-1,-1,-1), pch=c(20,20,20), horiz = T, bty = "n")
+
+
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+\newpage
+
+# Singular value decomposition
+
+A second way to find an orthonormal basis for dimensionality reduction is singular value decomposition (SVD). Considering an orthogonal matrix $U \in \mathbb{R}^{n \times q}$, an orthogonal matrix $V \in \mathbb{R}^{q \times q }$ and a diagonal matrix $\Lambda = diag(\lambda_1, ..., \lambda_q)$ with singular values $\lambda_1 \geq \lambda_2 \geq ... \geq \lambda_q \geq 0$, SVD is given by 
+
+$$
+X = U \Lambda V^T
+$$
+By substitution, we find that 
+
+$$
+V^T X^TX V = V^TV  \Lambda U^T U \lambda V^T V = \Lambda^2 = diag(\lambda^2_1, ..., \lambda_q^2)
+$$
+so that $\lambda_j^2, j = 1, ..., q$, are the eigenvalues of $A = X^TX$ and the column vectors of $V$ are the eigenvectors of $A$ which represent the orthonormal basis $v_1, ..., v_q$. The principal components are given by the column vectors of 
+
+$$
+XV = U\Lambda = U diag(\lambda_1, ...,\lambda_q) \in \mathbb{R}^{n \times q}
+$$
+This result can be used to construct the matrices $X_p$, i.e. the best rank $p$ approximation of $X$ that keeps as much variability of $X$ as possible by choosing the optimal $p \leq q$ orthonormal basis vectors $v_1, ..., v_p$. Formally, this matrix is given by
+
+$$
+X_p = U diag(\lambda_1, ..., \lambda_p, 0, ..., 0) V^T \in \mathbb{R}^{n \times q}
+$$
+
+and it minimizes the total squared reconstruction error, measured by the Frobenius norm
+
+$$
+||X_p - X ||_F = \sqrt{\sum_{i = 1}^n || \pi(x) - x_i ||^2_2}
+$$
+
+with respect to $X$ among all rank $p$ matrices
+
+$$
+X_p = \underset{B \in \mathbb{R}^{n \times q}}{argmin} || X - B ||_F, \hspace{0.5cm} s.t. \hspace{0.5cm} rank(B) \leq p
+$$
+
+Hence, it is possible to replace a $q$ dimensional representation of $X$ with a $p$ dimensional representation for which the reconstruction error is minimal. 
+
+The singular values $\lambda_p$ are shown below.
+
+```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+
+SVD = svd(dati_norm)
+SVD$d                              # singular values
+pc_1 = dati_norm %*% SVD$v[,1]     # 1st principal component
+pc_2 = dati_norm %*% SVD$v[,2]     # 2nd principal component
+
+```
+
+
+# Autoencoders
+
+An autoencoder consists of two mappings 
+
+$$
+\varphi : \mathbb{R}^q \rightarrow \mathbb{R}^p \hspace{0.5cm} \text{and} \hspace{0.5cm} \psi: \mathbb{R}^p \rightarrow \mathbb{R}^q
+$$
+with $p \leq q$ so that an autoencoder typically leads to a loss of information. 
+The function $\varphi$ is called encoder, while the function $\psi$ is called decoder. Hence, $y = \varphi(x) \in \mathbb{R}^p$ is a p-dimensional representation of $x \in \mathbb{R}^q$.
+Let $d(., .)$ be a dissimilarity function, such that $d(x, x') = 0$ iif $x = x'$.
+An autoncoder is defined as a pair of mappings $(\varphi, \psi)$ whose composition $\pi = \varphi \circ \psi$ leads to a small reconstruction error, i.e. $d(\pi(x), x)$ is small.
+
+If we view PCA as an autoencoder, a common choice for the dissimilarity function is the Euclidean distance on $\mathbb{R}^q$
+
+$$
+d(x', x) = || x' - x ||^2_2 = \sum_{j = 1}^q (x'_j - x_j)^2
+$$
+which results in the Frobenius norm
+
+$$
+||X' - X||^2_F = \sum_{i = 1}^n || x'_i - x_i ||^2_2
+$$
+
+The chunk below shows the reconstruction error of the pca for 5 principal components, scaled by the number of samples. For $p = 2$ principal components we obtain a reconstruction error of 1.14.
+
+```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+
+reconstruction <- array(NA, c(length(SVD$d)))
+for (p in 1:length(SVD$d)){
+  Xp <- SVD$v[,1:p] %*% t(SVD$v[,1:p]) %*% t(dati_norm)
+  Xp <- t(Xp)
+  error <-  as.matrix((dati_norm-Xp)^2)
+  reconstruction[p] <- sqrt(sum(error)/nrow(dati_norm))
+}
+round(reconstruction,2)   
+
+```
+
+In this example, we use bottleneck neural networks as an example of a non-linear autoencoder. Ideally, the BNN should have an odd number $d$ of hidden layers and the central hidden layer should be low dimensional, with $p < q$ hidden neurons. Furthermore, the remaining hidden layers should be symmetrical around the central hidden layer and the number of input units should be equal to the number of output units $q_0 = q$.
+
+Hence, for a BNN with $d = 3$, we choose the following numbers of neurons 
+
+$$
+(q_0, q_1, q_2, q_3, q_4) = (5, 7, 2, 7, 5)
+$$
+The number of input and output units $q_0 = q_4 = 5$ are equal to the number of features, while the number of neurons in the central hidden layer $q_2 = p = 2$ is equal to the number of principal components considered in the previous PCA example. 
+
+The activation function for the output layer is linear, since $x \in \mathbb{R}$, while the activation function for the hidden layers is the hyperbolic tangent. The same results obtained with the PCA would be achieved if we chose a linear activation function for the hidden layers of the BNN. In order to calibrate the BNN, we use the mean squared error loss function, which scales the Frobenius norm with the constant $(nq)^{-1}$, so that we minimize the same objective function in the PCA and BNN.
+
+\small
+
+```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+
+Input <- layer_input(shape = 5, dtype = 'float32', name = 'Input')
+  
+Encoder = Input %>% 
+  layer_dense(units=7, activation='tanh', use_bias=FALSE, name='Layer1') %>%
+  layer_dense(units=2, activation='tanh', use_bias=FALSE, name='Bottleneck') 
+
+Decoder = Encoder %>% 
+  layer_dense(units=7, activation='tanh', use_bias=FALSE, name='Layer3') %>% 
+  layer_dense(units=5, activation='linear', use_bias=FALSE, name='Output')
+
+model <- keras_model(inputs = Input, outputs = Decoder)
+model %>% compile(optimizer = optimizer_nadam(), loss = 'mean_squared_error')
+model
+
+```
+
+
+\normalsize
+
+
+Figure \ref{arch} lhs shows the architecture of the neural network. Bias units have not been included since the features are already standardized, which results in a BNN with 98 estimated parameters. Figure \ref{arch} rhs shows the decrease of Frobenius loss in the gradient descent algorithm. Training the BNN over 5000 epochs results in a reconstruction error of about 0.95, which is much smaller than the one obtained with PCA and marked by the red horizontal line. 
+
+\begin{scheme}
+\caption{\textbf{BNN architecture and loss function}}
+\label{arch}
+```{r arch, echo=FALSE, warning = FALSE, out.width='.49\\textwidth', fig.width=5, fig.height=5.5,fig.show='hold',fig.align='center'}
+
+q1 <- 7
+q2 <- 2
+q0 <- ncol(dati_norm)
+
+struct<-c(q0, q1, q2, q1, q0) 
+weights = c(unlist( get_weights(model) ), rep(0.001, q0 + q1 + q2 + q1))
+plotnet(weights,struct=struct, bias = F, nid = F, node_labs = F, bord_col = "black", circle_col = "lightgray")
+
+fit <- model %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), 
+                       epochs=5000, batch_size=nrow(dati_norm), verbose=0)
+
+plot(x=c(1:length(fit[[2]]$loss)), y=sqrt(fit[[2]]$loss*q0),  
+     ylim=c(0,max(sqrt(fit[[2]]$loss*q0))),
+     pch=19, cex=.5, 
+     xlab='epochs', ylab='Frobenius norm loss', main="gradient descent algorithm") 
+abline(h=c(reconstruction[2]), col="red")
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+
+set.seed(123)
+fit <- model %>% predict(as.matrix(dati_norm))
+round(frobenius_loss(dati_norm, fit), 2)
+
+
+```
+Another way of training the BNN is by splitting the estimation process into three steps:
+
+* In the first step, we train a BNN with depth 1 and neurons $(q_0, q_1, q_4) = (5, 7, 5)$
+* In the second step, we train a BNN with depth 1 and neurons $(q_1, q_2, q_3) = (7, 2, 7)$
+* In the third step, we use the pre-trained weights of the outer and inner part of the BNN as initial weights for the calibration of the full BNN with neurons $(q_0, q_1, q_2, q_3, q_4) = (5, 7, 2, 7, 5)$
+
+The BNN architecture for the outer and inner part is shown in Figure \ref{outer}.
+
+
+\begin{scheme}
+\caption{\textbf{BNN architecture for outer and inner part}}
+\label{outer}
+```{r outer, echo=FALSE, warning = FALSE, out.width='.49\\textwidth', fig.width=5, fig.height=5,fig.show='hold',fig.align='center'}
+
+model_1 <- BNN_1(q0, q1)
+struct<-c(q0, q1, q0) 
+weights = c(unlist( get_weights(model_1) ), rep(0.001, q0 + q1))
+plotnet(weights,struct=struct, bias = F, nid = F, 
+         node_labs = F, bord_col = "black", circle_col = "lightgray")
+
+model_2 <- BNN_1(q1, q2)
+struct<-c(q1, q2, q1) 
+weights = c(unlist( get_weights(model_2) ), rep(0.001, q1 + q2))
+plotnet(weights,struct=struct, bias = F, nid = F, 
+        node_labs = F, bord_col = "black", circle_col = "lightgray")
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+\small
+
+```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+
+BNN <- function(q0, q1){
+  set.seed(123)
+  Input <- layer_input(shape = c(q0), dtype = 'float32', name = 'Input')
+  
+  Output = Input %>% 
+    layer_dense(units=q1, activation='tanh', use_bias=FALSE, name='Bottleneck') %>% 
+    layer_dense(units=q0, activation='linear', use_bias=FALSE, name='Output')
+  
+  model <- keras_model(inputs = Input, outputs = Output)
+  
+  model %>% compile(optimizer = optimizer_nadam(), loss = 'mean_squared_error')
+  return(model)
+}
+
+# outer part
+outer <- BNN(5, 7)
+
+fit <- outer %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), 
+                     epochs= 5000, batch_size= nrow(dati_norm), verbose=0)
+
+zz <- keras_model(inputs= outer$input, 
+                  outputs=get_layer(outer, 'Bottleneck')$output)
+
+yy <- zz %>% predict(as.matrix(dati_norm))
+
+# inner part 
+inner <- BNN_1(7, 2)
+
+fit <- inner %>% fit(as.matrix(yy), as.matrix(yy), 
+                     epochs = 5000, batch_size = nrow(yy), verbose=0)
+
+# get pre trained weights
+weight_outer <- get_weights(outer)
+weight_inner <- get_weights(inner)
+
+# use pre-trained weights to fit the full BNN
+weights <- get_weights(model)
+weights[[1]] <- weight_outer[[1]]
+weights[[4]] <- weight_outer[[2]]
+weights[[2]] <- weight_inner[[1]]
+weights[[3]] <- weight_inner[[2]]
+set_weights(model, weights)
+
+set.seed(123)
+fit0 <- model %>% predict(as.matrix(dati_norm))
+
+# reconstruction error
+round(frobenius_loss(dati_norm, fit0), 2)
+
+```
+
+Using the pre-trained weights extracted above, we retrain the full BNN and obtain a reconstruction error of 1.3, which is worse than the one obtained with PCA (1.19) as well as the one obtained by training the full model. However, by using these weights to initialize the full BNN, we obtain a reconstruction error of 0.84, which is slightly smaller than the one obtained without initialization. 
+Figure \ref{pre_train} shows the decrease of the Frobenius loss over 5000 training epochs. We see that after about 2000 epochs the reconstruction error falls below the one of the PCA with 2 principal components. 
+
+\begin{scheme}
+\caption{\textbf{Loss function of pre-trained BNN}}
+\label{pre_train}
+```{r pre_train, echo=FALSE, warning = FALSE, out.width='.49\\textwidth', fig.width=5, fig.height=5.5,fig.show='hold',fig.align='center'}
+
+fit <- model %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=5000, batch_size=nrow(dati_norm), verbose=0)
+
+plot(x=c(1:length(fit[[2]]$loss)), y=sqrt(fit[[2]]$loss*q0),  
+     ylim=c(0,max(sqrt(fit[[2]]$loss*q0))), pch=19, cex=.5, 
+     xlab='epochs', ylab='Frobenius norm loss', main="gradient descent algorithm") 
+abline(h=c(reconstruction[2]), col="orange")
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+Figure \ref{clusters} shows a comparison of the clusters obtained with PCA and BNN. We see that the dimension reduction of the BNN appears to be a slightly rotated and scaled version of the PCA results. 
+
+\begin{scheme}
+\caption{\textbf{Cluster analysis}}
+\label{clusters}
+```{r clusters,echo=FALSE, warning = FALSE, fig.width=10, fig.height=5.5, fig.show='hold',fig.align='center'}
+
+
+par(mfrow = c(1, 2))
+
+# pca
+plot(x=dati$pca1, y=dati$pca2, col="blue",pch=20, 
+     ylab="2nd pc", xlab="1st pc", main = "PCA")
+dat0 <- dati[which( dati$medv >= 10 &  dati$medv < 30 ),]
+points(x=dat0$pca1, y=dat0$pca2, col="red",pch=20)
+dat0 <- dati[which(dati$medv<10),]
+points(x=dat0$pca1, y=dat0$pca2, col="green",pch=20)
+
+
+# BNN
+encoder <- keras_model(inputs=model$input, outputs=get_layer(model, 'Bottleneck')$output)
+y <- encoder %>% predict(as.matrix(dati_norm))
+y0 <- max(abs(y))*1.1
+
+plot(x=y[,1], y=y[,2], col="blue",pch=20, 
+     ylab="2nd bottleneck neuron", xlab="1st bottleneck neuron", main = "BNN")
+dat0 <- y[which( dati$medv >= 10 &  dati$medv < 30 ),]
+points(x=dat0[, 1], y=dat0[, 2], col="red",pch=20)
+dat0 <- y[which(dati$medv<10),]
+points(x=dat0[, 1], y=dat0[, 2], col="green",pch=20)
+
+add_legend("bottom", c("high", "medium", "low"), col=c("blue", "red", "green"), 
+           lty=c(-1,-1,-1), lwd=c(-1,-1,-1), pch=c(20,20,20), horiz = T, bty = "n")
+
+
+
+```
+\vspace{-0.7em}
+\end{scheme}
+
+\newpage
+
+# References
+
+Harrison Jr, D., & Rubinfeld, D. L. (1978). Hedonic housing prices and the demand for clean air. Journal of environmental economics and management, 5(1), 81-102.
+
+Hinton, G.E., Salakhutdinov, R.R. (2006). Reducing the dimensionality of data with neural networks.
+Science 313, 504-507.
+
+Hothorn, T., Everitt, B.S. (2014). A Handbook of Statistical Analyses using R. 3rd edition. CRC
+Press
+
+Kramer, M.A. (1991). Nonlinear principal component analysis using autoassociative neural networks.
+AIChE Journal 37/2, 233-243.
+
+Rentzmann, S., & Wuthrich, M. V. (2019). Unsupervised Learning: What is a Sports Car?. Available at SSRN 3439358.
+
