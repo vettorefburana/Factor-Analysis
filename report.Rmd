@@ -19,30 +19,22 @@ output:
   highlight: tango
   graphics: yes
 header-includes:
-- \usepackage[listings, breakable, most]{tcolorbox}
-- \definecolor{framecolor}{RGB}{163, 21, 21}
-- \definecolor{backcolor}{RGB}{220, 220, 220}
-- \definecolor{backcolor2}{RGB}{237, 237, 237}
 - \usepackage{hyperref}
 - \urlstyle{same}
 - \usepackage{eurosym}
 - \usepackage{float}
 - \usepackage{amsmath}
 - \floatplacement{figure}{H}
-- \usepackage{fancyhdr}
-- \pagestyle{fancy}
-#- \fancyfoot[LE,RO]{\thepage}
-- \fancyhead[RO, RE]{ }
-- \usepackage{fontspec}
-- \setmainfont{Calibri}
 - \usepackage{booktabs}
 - \usepackage{longtable}
 - \usepackage{array}
 - \usepackage{multirow}
-- \usepackage{wrapfig}
-- \usepackage{colortbl}
-- \usepackage{pdflscape}
 - \usepackage{tabu}
+- \newtheorem{theorem}{Theorem}
+- \usepackage[shortlabels]{enumitem}
+- \usepackage{algorithm}
+- \usepackage{algorithmic}
+- \usepackage{bbm}
 - \usepackage{threeparttable}
 - \usepackage{threeparttablex}
 - \usepackage[normalem]{ulem}
@@ -51,29 +43,14 @@ header-includes:
 - \usepackage{footnote}
 - \captionsetup[figure]{belowskip=2pt, aboveskip=-12pt}
 - \captionsetup[table]{textfont=bf}
-- \usepackage{eurosym}
-- \usepackage{ragged2e}
-- \usepackage{dcolumn}
-- \usepackage{lscape}
-- \newcommand{\blandscape}{\begin{landscape}}
-- \newcommand{\elandscape}{\end{landscape}}
-- \usepackage{setspace}\doublespacing
-- \renewcommand{\baselinestretch}{1}
-- \usepackage[fontsize=14pt]{scrextend}
+- \usepackage[fontsize=13pt]{scrextend}
 - \DeclareCaptionType[fileext=los,placement={!h}]{scheme} 
 - \renewcommand{\schemename}{Figura}
 - \DeclareCaptionType[fileext=los,placement={!ht}]{troll} 
-- \renewcommand{\trollname}{Tabella}
-- \renewcommand{\figurename}{Figura}
-- \renewcommand{\tablename}{Tabella}
-- \renewcommand{\contentsname}{Indice}
-- \renewcommand{\thefigure}{\Alph{figure}}
 - \setlength{\intextsep}{10pt plus 2pt minus 2pt}
 - \floatplacement{scheme}{H}
 - \captionsetup[scheme]{belowskip=2pt, aboveskip=-12pt}
-- \newtcolorbox[auto counter, list inside=boxes]{mybox}[1][]{breakable, colframe=framecolor, colback=black!5!white,title=Box \thetcbcounter :, fonttitle=\normalsize\bfseries, subtitle style= {top=-2pt, nobeforeafter,colback=black!5!white, coltext=black, colframe=black!5!white, fontupper=\itshape\small}, parbox=false, arc=3mm, sharp corners=downhill}
 classoption: table
-# abstract: ""
 ---
 
 ```{r setup, include=FALSE}
@@ -350,7 +327,7 @@ The matrix $A = X^TX$ is positive definite and symmetric by assumption, so that 
 
 \newpage
 
-```{r ,echo=T, warning = F, include=T, results=T, eval  = T}
+```{r ,echo=T, warning = F, include=T, results=T, eval = T}
 
 dati_norm = scale(dataset[, -1])
 pca = prcomp(dati_norm, center = F, scale = F)
@@ -418,7 +395,6 @@ add_legend("topright", c("high", "medium", "low"), col=c("blue", "red", "green")
 \vspace{-0.7em}
 \end{scheme}
 
-\newpage
 
 # Singular value decomposition
 
@@ -459,7 +435,7 @@ Hence, it is possible to replace a $q$ dimensional representation of $X$ with a 
 
 The singular values $\lambda_p$ are shown below.
 
-```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+```{r , echo=T, warning = F, include=T, results=T, eval = T}
 
 SVD = svd(dati_norm)
 SVD$d                              # singular values
@@ -494,7 +470,7 @@ $$
 
 The chunk below shows the reconstruction error of the pca for 5 principal components, scaled by the number of samples. For $p = 2$ principal components we obtain a reconstruction error of 1.14.
 
-```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+```{r , echo=T, warning = F, include=T, results=T, eval = T}
 
 reconstruction <- array(NA, c(length(SVD$d)))
 for (p in 1:length(SVD$d)){
@@ -520,7 +496,7 @@ The activation function for the output layer is linear, since $x \in \mathbb{R}$
 
 \small
 
-```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+```{r , echo=T, warning = F, include=T, results=T, eval = T}
 
 set.seed(123)
 Input <- layer_input(shape = 5, dtype = 'float32', name = 'Input')
@@ -571,7 +547,7 @@ abline(h=c(reconstruction[2]), col="red")
 \vspace{-0.7em}
 \end{scheme}
 
-```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+```{r , echo=T, warning = F, include=T, results=T, eval = T}
 
 fit <- model %>% predict(as.matrix(dati_norm))
 round(frobenius_loss(dati_norm, fit), 2)
@@ -610,7 +586,7 @@ plotnet(weights,struct=struct, bias = F, nid = F,
 
 \small
 
-```{r , echo=T, warning = F, include=T, results=T, eval  = T}
+```{r , echo=T, warning = F, include=T, results=T, eval = T}
 
 BNN <- function(q0, q1){
   set.seed(123)
@@ -677,7 +653,7 @@ fit <- model %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=5000, ba
 plot(x=c(1:length(fit[[2]]$loss)), y=sqrt(fit[[2]]$loss*q0),  
      ylim=c(0,max(sqrt(fit[[2]]$loss*q0))), pch=19, cex=.5, 
      xlab='epochs', ylab='Frobenius norm loss', main="gradient descent algorithm") 
-abline(h=c(reconstruction[2]), col="orange")
+abline(h=c(reconstruction[2]), col="red")
 
 ```
 \vspace{-0.7em}
