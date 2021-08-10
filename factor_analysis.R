@@ -3,6 +3,10 @@ library(MASS)
 library(keras)
 library(NeuralNetTools)
 library(kableExtra)
+library(olsrr)
+library(Hmisc)
+
+use_session_with_seed(123)
 
 # functions ############
 add_legend <- function(...) {
@@ -48,6 +52,8 @@ BNN_3 <- function(q00, q11, q22){
   return(model)
 }
 
+# descriptive statistics ####
+percentiles = Hmisc::describe(boston$medv)
 
 # detect outliers  ##########
 boston = Boston
@@ -81,14 +87,12 @@ tosquare = c("nox", "rm")
 db_log[, tosquare] = db_sel[, tosquare]^2
 dataset = db_log[, fts]
 
-dati = cbind(dataset, pca1 = pca$x[, 1], pca2 = pca$x[, 2])
-dati$medv = exp(dataset$medv)
-
 # pca ##########
 dati_norm = scale(dataset[, -1])
 pca = prcomp(dati_norm, center = F, scale = F)
-summary(pca)
-pca$rotation
+
+dati = cbind(dataset, pca1 = pca$x[, 1], pca2 = pca$x[, 2])
+dati$medv = exp(dataset$medv)
 
 # svd ############# 
 SVD = svd(dati_norm)
@@ -101,7 +105,7 @@ reconstruction <- array(NA, c(length(SVD$d)))
 for (p in 1:length(SVD$d)){
   Xp <- SVD$v[,1:p] %*% t(SVD$v[,1:p]) %*% t(dati_norm)
   Xp <- t(Xp)
-  reconstruction[p] <- sqrt(sum(as.matrix((dati_norm-Xp)^2))/nrow(dati_norm))
+  reconstruction[p] <- sqrt(sum(as.matrix((dati_norm - Xp)^2))/nrow(dati_norm))
 }
 round(reconstruction,2)  
 
@@ -118,9 +122,11 @@ batch_size <- nrow(dati_norm)
 model_3 <- BNN_3(q0, q1, q2)
 model_3
 
-fit <- model_3 %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=epochs, batch_size=batch_size, verbose=0)
-fit <- model_3 %>% predict(as.matrix(dati_norm))
-round(frobenius_loss(dati_norm,fit),4) # reconstruction error of full model
+fit_train_full <- model_3 %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=epochs, batch_size=batch_size, verbose=0)
+fit_test_full <- model_3 %>% predict(as.matrix(dati_norm))
+round(frobenius_loss(dati_norm,fit_test_full),4) # reconstruction error of full model
+
+w3 = get_weights(model_3)
 
 ## stepwise calibration #####
 # outer part
@@ -155,16 +161,16 @@ fit0 <- model_3 %>% predict(as.matrix(dati_norm))
 round(frobenius_loss(dati_norm,fit0),4)
 
 # reconstruction error using pre-trained weights as initialization
-fit <- model_3 %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=epochs, batch_size=batch_size, verbose=0)
-fit <- model_3 %>% predict(as.matrix(dati_norm))
-round(frobenius_loss(dati_norm, fit),4)
+fit_train <- model_3 %>% fit(as.matrix(dati_norm), as.matrix(dati_norm), epochs=epochs, batch_size=batch_size, verbose=0)
+fit_test <- model_3 %>% predict(as.matrix(dati_norm))
+round(frobenius_loss(dati_norm, fit_test),4)
 
 # bottleneck activations for cluster analysis
 encoder <- keras_model(inputs=model_3$input, outputs=get_layer(model_3, 'Bottleneck')$output)
 y <- encoder %>% predict(as.matrix(dati_norm))
 y0 <- max(abs(y))*1.1
 
-
+save.image("./factor_analysis.RData")
 
 
 
