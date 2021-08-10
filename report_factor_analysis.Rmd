@@ -1,6 +1,6 @@
 
 ---
-title: 'Factor Analysis: PCA vs Autoencoder'
+title: 'Factor Analysis: PCA vs Autoencoders'
 author: "Verena Brufatto"
 date: \today
 output:
@@ -265,7 +265,7 @@ for(i in 1:ncol(dataset)){
 \vspace{-0.7em}
 \end{scheme}
 
-Table \ref{desc} shows the descriptive statistics of the median value of houses (medv). The distribution has positive skewness, a mean value of about 23 thousand USD, a median value of 21 thousand USD and is capped at 50 thousand USD. All values above 39 thousand USD are considered outliers, since they make up for only 7% of all observed house prices. 
+Table \ref{tab:desc} shows the descriptive statistics of the median value of houses (medv). The distribution has positive skewness, a mean value of about 23 thousand USD, a median value of 21 thousand USD and is capped at 50 thousand USD. All values above 39 thousand USD are considered outliers, since they make up for only 7% of all observed house prices. 
 
 For the purpose of this analysis, we label house prices above the 90th percentile, which corresponds to 35 thousand USD, as "expensive" and house prices below the 10th percentile as "cheap" (13 thousand USD).
 
