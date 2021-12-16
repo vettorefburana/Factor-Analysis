@@ -1,0 +1,11 @@
+
+install.packages("markdown")
+install.packages("MASS")
+install.packages("xts")
+install.packages("ggcorrplot")
+install.packages("kableExtra")
+install.packages("keras")
+install.packages("tensorflow")
+install.packages("NeuralNetTools")
+install.packages("Hmisc")
+install.packages("olsrr")
