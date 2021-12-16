@@ -1,8 +1,10 @@
 # Factor-Analysis
 
 **Factor analysis using PCA, SVD and bottleneck neural network (BNN) autoencoders using the Boston Housing dataset**
-Factor analysis is generally used for dimensionality reduction, which is achieved by identifying a low number of latent factors that are able to capture the variability of the data without too much loss of information. The R script in this repository
-implements and compares different factor analysis techniques using data on the Boston real estate market: 
+
+Factor analysis is generally used for dimensionality reduction, which is achieved by identifying a low number of latent factors that are able to capture the variability of the data without too much loss of information. 
+
+The R script in this repository implements and compares different factor analysis techniques using data on the Boston real estate market: 
 
 * Principal component analysis
 * Singular value decomposition
