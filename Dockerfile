@@ -2,8 +2,8 @@ FROM rocker/verse:4.1.0
 
 RUN apt-get clean all && \
   apt-get -o Acquire::Max-FutureTime=86400 update && \
-  apt-get -o Acquire::Max-FutureTime=86400 upgrade -y && \
-  apt-get -o Acquire::Max-FutureTime=86400 install -y \
+  upgrade -y && \
+  install -y \
     libhdf5-dev \
     libcurl4-gnutls-dev \
     libssl-dev \
