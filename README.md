@@ -14,6 +14,6 @@ The different methods are compared based on how well they can discriminate betwe
 
 The folder ```R``` contains the RStudio script for the implementation and the Rmarkdown file for generating the report. 
 
-A Dockerfile has been added to the repository to ensure reproducibility of results. See https://github.com/vettorefburana/Run-Rstudio-Server-from-Docker for instructions on how to run the Docker container.
+A Docker image to run RStudio has been added to the repository to ensure reproducibility of results. See https://github.com/vettorefburana/Run-Rstudio-Server-from-Docker for instructions on how to run the Docker container.
 
 
